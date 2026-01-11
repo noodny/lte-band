@@ -9,6 +9,7 @@ function App() {
   const [userSelectedBands, setUserSelectedBands] = useState([]);
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [fetchError, setFetchError] = useState(false);
 
@@ -89,6 +90,7 @@ function App() {
   };
 
   const handleSave = async () => {
+    setIsSaving(true);
     try {
       const response = await fetch("/save", {
         method: "POST",
@@ -106,6 +108,8 @@ function App() {
     } catch (error) {
       setStatus("Error saving data");
       console.error("Error:", error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -166,9 +170,9 @@ function App() {
         <button
           className="save-button"
           onClick={handleSave}
-          disabled={!hasChanges()}
+          disabled={!hasChanges() || isSaving}
         >
-          Save
+          {isSaving ? "Saving..." : "Save"}
         </button>
 
         {status && (
