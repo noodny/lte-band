@@ -52,7 +52,7 @@ async function getLTEStatus() {
 
       const line = lines[lines.length - 1];
 
-      fastify.log.info(`[${stage}] ${line}`);
+      fastify.log.info(`[STATUS][${stage}] ${line}`);
 
       if (stage === "login" && line.includes("login:")) {
         telnet.stdin.write("root\n");
@@ -157,10 +157,99 @@ async function getLTEStatus() {
 
 // Save endpoint
 fastify.post("/save", async (request, reply) => {
-  // TODO: Implement save logic
-  const data = request.body;
-  return { success: true, received: data };
+  try {
+    const { bands } = request.body;
+
+    if (!Array.isArray(bands)) {
+      return reply.code(400).send({ error: "bands must be an array" });
+    }
+
+    await saveLTEBands(bands);
+    return { success: true, bands };
+  } catch (error) {
+    fastify.log.error(error);
+    return reply
+      .code(500)
+      .send({ error: error.message || "Failed to save LTE bands" });
+  }
 });
+
+async function saveLTEBands(bands) {
+  return new Promise((resolve, reject) => {
+    const telnet = spawn("telnet", ["192.168.100.1"]);
+
+    let buffer = "";
+    let stage = "login";
+
+    const processOutput = (data) => {
+      buffer += data;
+      const lines = buffer.split("\n").filter((line) => line.trim() !== "");
+
+      const line = lines[lines.length - 1];
+
+      fastify.log.info(`[SAVE][${stage}] ${line}`);
+
+      if (stage === "login" && line.includes("login:")) {
+        telnet.stdin.write("root\n");
+        stage = "password";
+      } else if (stage === "password" && line.includes("Password:")) {
+        telnet.stdin.write("gct\n");
+        stage = "ready";
+      } else if (
+        stage === "ready" &&
+        line.includes("G C T   L T E   M O D E M")
+      ) {
+        telnet.stdin.write("lted_cli\n");
+        stage = "lted_cli";
+      } else if (
+        stage === "lted_cli" &&
+        line.includes("lted_client_init fail")
+      ) {
+        telnet.kill();
+        reject(new Error("Failed to initialize lted_cli"));
+      } else if (stage === "lted_cli" && line.includes("OK")) {
+        telnet.stdin.write("arm1log 2\n");
+        stage = "arm1log";
+      } else if (stage === "arm1log" && line.includes("OK")) {
+        const bandsString = bands.join(" ");
+        telnet.stdin.write(`nvm bcfgw 49 0 ${bandsString}\n`);
+        stage = "nvm_bcfgw";
+      } else if (stage === "nvm_bcfgw" && line.includes("OK")) {
+        telnet.stdin.write("nvm bcfgsv 1\n");
+        stage = "nvm_bcfgsv";
+      } else if (stage === "nvm_bcfgsv" && line.includes("OK")) {
+        telnet.stdin.write("shell\n");
+        stage = "shell";
+      } else if (stage === "shell" && line.includes("#")) {
+        telnet.stdin.write("reboot\n");
+        stage = "reboot";
+        // Give it a moment to send the reboot command
+        setTimeout(() => {
+          telnet.kill();
+          resolve();
+        }, 1000);
+      }
+    };
+
+    telnet.stdout.on("data", (data) => {
+      processOutput(data.toString());
+    });
+
+    telnet.stderr.on("data", (data) => {
+      fastify.log.error(`Telnet error: ${data}`);
+    });
+
+    telnet.on("error", (error) => {
+      reject(error);
+    });
+
+    // Set a timeout of 30 seconds
+    setTimeout(() => {
+      telnet.kill();
+      reject(new Error("Timeout while saving LTE bands"));
+    }, 30000);
+  });
+}
 
 // Serve index.html for all other routes (SPA fallback)
 fastify.setNotFoundHandler((request, reply) => {
