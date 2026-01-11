@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import path from "path";
 import { fileURLToPath } from "url";
+import { spawn } from "child_process";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,9 +26,134 @@ await fastify.register(fastifyStatic, {
 
 // Status endpoint
 fastify.get("/status", async (request, reply) => {
-  // TODO: Implement status logic
-  return { status: "ok" };
+  try {
+    const { selectedBands, activeBands } = await getLTEStatus();
+    return { selectedBands, activeBands };
+  } catch (error) {
+    fastify.log.error(error);
+    return reply
+      .code(500)
+      .send({ error: error.message || "Failed to get LTE status" });
+  }
 });
+
+async function getLTEStatus() {
+  return new Promise((resolve, reject) => {
+    const telnet = spawn("telnet", ["192.168.100.1"]);
+
+    let buffer = "";
+    let selectedBands = [];
+    let activeBands = [];
+    let stage = "login";
+
+    const processOutput = (data) => {
+      buffer += data;
+      const lines = buffer.split("\n").filter((line) => line.trim() !== "");
+
+      const line = lines[lines.length - 1];
+
+      fastify.log.info(`[${stage}] ${line}`);
+
+      if (stage === "login" && line.includes("login:")) {
+        telnet.stdin.write("root\n");
+        stage = "password";
+      } else if (stage === "password" && line.includes("Password:")) {
+        telnet.stdin.write("gct\n");
+        stage = "ready";
+      } else if (
+        stage === "ready" &&
+        line.includes("G C T   L T E   M O D E M")
+      ) {
+        telnet.stdin.write("lted_cli\n");
+        stage = "lted_cli";
+      } else if (
+        stage === "lted_cli" &&
+        line.includes("lted_client_init fail")
+      ) {
+        reject(new Error("Failed to initialize lted_cli"));
+      } else if (stage === "lted_cli" && line.includes("OK")) {
+        telnet.stdin.write("arm1log 2\n");
+        stage = "arm1log";
+      } else if (stage === "arm1log" && line.includes("OK")) {
+        telnet.stdin.write("nvm bcfgr 49 0\n");
+        stage = "nvm_bcfgr";
+      } else if (stage === "nvm_bcfgr") {
+        const resultLine = lines.find((line) =>
+          /([0-9]{1,2} ){10,}/.test(line)
+        );
+
+        if (resultLine) {
+          const bands = resultLine
+            .split(" ")
+            .map((num) => parseInt(num))
+            .filter((num) => !isNaN(num))
+            .filter((number) => number !== 0);
+
+          if (bands.length > 0) {
+            selectedBands = bands;
+            stage = "wait_glte";
+          }
+        }
+      } else if (
+        stage === "wait_glte" &&
+        lines.some((line) => line.includes("%GLTECONNSTATUS:"))
+      ) {
+        stage = "parse_active";
+      } else if (stage === "parse_active") {
+        lines.forEach((line) => {
+          // Extract active bands
+          const bandMatch = line.match(/Band ([0-9]+)/);
+          const scellBandMatch = line.match(/scellBand ([0-9]+)/);
+
+          if (bandMatch) {
+            activeBands.push(parseInt(bandMatch[1]));
+          }
+          if (scellBandMatch) {
+            activeBands.push(parseInt(scellBandMatch[1]));
+          }
+        });
+
+        // If we found at least one band, we can complete
+        if (activeBands.length > 0) {
+          telnet.stdin.write("exit\n");
+          telnet.kill();
+          resolve({ selectedBands, activeBands: [...new Set(activeBands)] });
+        }
+      }
+    };
+
+    telnet.stdout.on("data", (data) => {
+      processOutput(data.toString());
+    });
+
+    telnet.stderr.on("data", (data) => {
+      fastify.log.error(`Telnet error: ${data}`);
+    });
+
+    telnet.on("close", (code) => {
+      if (stage === "parse_active" && activeBands.length === 0) {
+        // Sometimes we might not get active bands if not connected
+        resolve({ selectedBands, activeBands: [] });
+      } else if (selectedBands.length === 0) {
+        reject(new Error("Failed to retrieve LTE status"));
+      }
+    });
+
+    telnet.on("error", (error) => {
+      reject(error);
+    });
+
+    // Set a timeout of 30 seconds
+    setTimeout(() => {
+      telnet.kill();
+      if (selectedBands.length > 0) {
+        resolve({ selectedBands, activeBands });
+      } else {
+        reject(new Error("Timeout waiting for LTE status"));
+      }
+    }, 30000);
+  });
+}
 
 // Save endpoint
 fastify.post("/save", async (request, reply) => {

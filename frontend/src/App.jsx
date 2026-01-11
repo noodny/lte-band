@@ -1,20 +1,59 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
 
-const BAND_VALUES = [1, 3, 7, 8, 20];
+const BAND_VALUES = [0, 1, 3, 7, 8, 20];
 
 function App() {
-  const [selectedBands, setSelectedBands] = useState(new Set());
+  const [selectedBands, setSelectedBands] = useState([]);
+  const [activeBands, setActiveBands] = useState([]);
+  const [userSelectedBands, setUserSelectedBands] = useState([]);
   const [status, setStatus] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  const fetchStatus = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch("/status");
+      const data = await response.json();
+      setSelectedBands(data.selectedBands || []);
+      setActiveBands(data.activeBands || []);
+
+      // Initialize userSelectedBands only on first fetch
+      if (!isInitialized) {
+        setUserSelectedBands(data.selectedBands || []);
+        setIsInitialized(true);
+      }
+    } catch (error) {
+      console.error("Error fetching status:", error);
+      setStatus("Error fetching status");
+      setTimeout(() => setStatus(""), 3000);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Fetch immediately on mount
+    fetchStatus();
+
+    // Set up interval to fetch every 30 seconds
+    const interval = setInterval(fetchStatus, 30000);
+
+    // Cleanup interval on unmount
+    return () => clearInterval(interval);
+  }, []);
 
   const toggleBand = (value) => {
-    const newSelected = new Set(selectedBands);
-    if (newSelected.has(value)) {
-      newSelected.delete(value);
-    } else {
-      newSelected.add(value);
-    }
-    setSelectedBands(newSelected);
+    setUserSelectedBands((prev) => {
+      if (prev.includes(value)) {
+        // Remove from selection
+        return prev.filter((band) => band !== value);
+      } else {
+        // Add to selection
+        return [...prev, value];
+      }
+    });
   };
 
   const handleSave = async () => {
@@ -25,7 +64,7 @@ function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          bands: Array.from(selectedBands),
+          bands: userSelectedBands,
         }),
       });
 
@@ -38,27 +77,65 @@ function App() {
     }
   };
 
+  const getBandClassName = (value) => {
+    const isActive = activeBands.includes(value);
+    const isSelected = userSelectedBands.includes(value);
+
+    if (isActive && isSelected) return "band-button active-band";
+    if (isSelected) return "band-button selected-band";
+    return "band-button";
+  };
+
+  const hasChanges = () => {
+    if (userSelectedBands.length !== selectedBands.length) return true;
+    const sortedUser = [...userSelectedBands].sort((a, b) => a - b);
+    const sortedSelected = [...selectedBands].sort((a, b) => a - b);
+    return !sortedUser.every((band, index) => band === sortedSelected[index]);
+  };
+
   return (
     <div className="app">
       <div className="container">
         <h1>LTE Band Selector</h1>
 
+        <button
+          className="refresh-button"
+          onClick={fetchStatus}
+          disabled={isLoading}
+        >
+          {isLoading ? "Refreshing..." : "Refresh Status"}
+        </button>
+
         <div className="band-grid">
           {BAND_VALUES.map((value) => (
-            <button
+            <div
               key={value}
-              className={`band-button ${
-                selectedBands.has(value) ? "active" : ""
-              }`}
+              className={getBandClassName(value)}
               onClick={() => toggleBand(value)}
+              style={{ cursor: "pointer" }}
             >
               <span className="band-label">Band</span>
               <span className="band-value">{value}</span>
-            </button>
+              {activeBands.includes(value) && (
+                <span className="band-status">Active</span>
+              )}
+              {userSelectedBands.includes(value) &&
+                !activeBands.includes(value) && (
+                  <span className="band-status">Selected</span>
+                )}
+              {!userSelectedBands.includes(value) &&
+                !activeBands.includes(value) && (
+                  <span className="band-status">&nbsp;</span>
+                )}
+            </div>
           ))}
         </div>
 
-        <button className="save-button" onClick={handleSave}>
+        <button
+          className="save-button"
+          onClick={handleSave}
+          disabled={!hasChanges()}
+        >
           Save
         </button>
 
