@@ -54,27 +54,11 @@ function App() {
     // Fetch immediately on mount
     fetchStatus();
 
-    // Set up dynamic interval based on fetch success
-    let intervalId;
+    // Set up interval to fetch every 5 seconds
+    const interval = setInterval(fetchStatus, 5000);
 
-    const setupInterval = async () => {
-      const success = await fetchStatus();
-      const delay = success ? 30000 : 60000; // 30s on success, 60s on error
-
-      intervalId = setTimeout(() => {
-        setupInterval();
-      }, delay);
-    };
-
-    // Start the interval cycle after initial fetch
-    const success = fetchError ? false : true;
-    const initialDelay = success ? 30000 : 60000;
-    intervalId = setTimeout(() => {
-      setupInterval();
-    }, initialDelay);
-
-    // Cleanup timeout on unmount
-    return () => clearTimeout(intervalId);
+    // Cleanup interval on unmount
+    return () => clearInterval(interval);
   }, []);
 
   const toggleBand = (value) => {

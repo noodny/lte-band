@@ -12,6 +12,14 @@ const fastify = Fastify({
   logger: true,
 });
 
+// Store latest LTE status
+let cachedStatus = {
+  selectedBands: [],
+  activeBands: [],
+  lastUpdated: null,
+  error: null,
+};
+
 // Enable CORS for frontend communication
 await fastify.register(cors, {
   origin: true,
@@ -26,15 +34,15 @@ await fastify.register(fastifyStatic, {
 
 // Status endpoint
 fastify.get("/status", async (request, reply) => {
-  try {
-    const { selectedBands, activeBands } = await getLTEStatus();
-    return { selectedBands, activeBands };
-  } catch (error) {
-    fastify.log.error(error);
-    return reply
-      .code(500)
-      .send({ error: error.message || "Failed to get LTE status" });
+  if (cachedStatus.error) {
+    return reply.code(500).send({ error: cachedStatus.error });
   }
+
+  return {
+    selectedBands: cachedStatus.selectedBands,
+    activeBands: cachedStatus.activeBands,
+    lastUpdated: cachedStatus.lastUpdated,
+  };
 });
 
 async function getLTEStatus() {
@@ -256,9 +264,33 @@ fastify.setNotFoundHandler((request, reply) => {
   reply.sendFile("index.html");
 });
 
+// Function to periodically update LTE status
+async function updateLTEStatus() {
+  try {
+    const { selectedBands, activeBands } = await getLTEStatus();
+    cachedStatus = {
+      selectedBands,
+      activeBands,
+      lastUpdated: new Date().toISOString(),
+      error: null,
+    };
+    fastify.log.info(
+      `LTE status updated: ${selectedBands.length} selected, ${activeBands.length} active`
+    );
+  } catch (error) {
+    fastify.log.error(`Failed to update LTE status: ${error.message}`);
+    cachedStatus.error = error.message;
+  }
+}
+
 // Start server
 try {
   await fastify.listen({ port: 3001, host: "0.0.0.0" });
+
+  // Start periodic status updates
+  fastify.log.info("Starting periodic LTE status updates (every 30 seconds)");
+  updateLTEStatus(); // Initial fetch
+  setInterval(updateLTEStatus, 30000); // Every 30 seconds
 } catch (err) {
   fastify.log.error(err);
   process.exit(1);
