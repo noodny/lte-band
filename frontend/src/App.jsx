@@ -10,24 +10,40 @@ function App() {
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
 
   const fetchStatus = async () => {
     setIsLoading(true);
     try {
       const response = await fetch("/status");
+
+      if (!response.ok) {
+        throw new Error(response.body);
+      }
+
       const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
       setSelectedBands(data.selectedBands || []);
       setActiveBands(data.activeBands || []);
+      setFetchError(false);
 
       // Initialize userSelectedBands only on first fetch
       if (!isInitialized) {
         setUserSelectedBands(data.selectedBands || []);
         setIsInitialized(true);
       }
+
+      return true;
     } catch (error) {
       console.error("Error fetching status:", error);
-      setStatus("Error fetching status");
-      setTimeout(() => setStatus(""), 3000);
+      setFetchError(true);
+      setStatus(`${error.message}`);
+      setTimeout(() => setStatus(""), 5000);
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -37,11 +53,27 @@ function App() {
     // Fetch immediately on mount
     fetchStatus();
 
-    // Set up interval to fetch every 30 seconds
-    const interval = setInterval(fetchStatus, 30000);
+    // Set up dynamic interval based on fetch success
+    let intervalId;
 
-    // Cleanup interval on unmount
-    return () => clearInterval(interval);
+    const setupInterval = async () => {
+      const success = await fetchStatus();
+      const delay = success ? 30000 : 60000; // 30s on success, 60s on error
+
+      intervalId = setTimeout(() => {
+        setupInterval();
+      }, delay);
+    };
+
+    // Start the interval cycle after initial fetch
+    const success = fetchError ? false : true;
+    const initialDelay = success ? 30000 : 60000;
+    intervalId = setTimeout(() => {
+      setupInterval();
+    }, initialDelay);
+
+    // Cleanup timeout on unmount
+    return () => clearTimeout(intervalId);
   }, []);
 
   const toggleBand = (value) => {
@@ -139,7 +171,11 @@ function App() {
           Save
         </button>
 
-        {status && <div className="status-message">{status}</div>}
+        {status && (
+          <div className={`status-message ${fetchError ? "error" : ""}`}>
+            {status}
+          </div>
+        )}
       </div>
     </div>
   );
