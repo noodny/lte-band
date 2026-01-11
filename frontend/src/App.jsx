@@ -18,6 +18,13 @@ function App() {
     cinr: null,
     rsrq: null,
   });
+  const [speedtest, setSpeedtest] = useState({
+    download: null,
+    upload: null,
+    ping: null,
+    timestamp: null,
+    isRunning: false,
+  });
 
   const fetchStatus = async () => {
     setIsLoading(true);
@@ -44,6 +51,15 @@ function App() {
         cinr: data.cinr,
         rsrq: data.rsrq,
       });
+      if (data.speedtest) {
+        setSpeedtest({
+          download: data.speedtest.download,
+          upload: data.speedtest.upload,
+          ping: data.speedtest.ping,
+          timestamp: data.speedtest.timestamp,
+          isRunning: data.speedtest.isRunning || false,
+        });
+      }
       setFetchError(false);
 
       // Initialize userSelectedBands only on first fetch
@@ -116,6 +132,25 @@ function App() {
       console.error("Error:", error);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleRunSpeedtest = async () => {
+    try {
+      const response = await fetch("/speedtest", {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to start speedtest");
+      }
+
+      // Immediately mark as running
+      setSpeedtest((prev) => ({ ...prev, isRunning: true }));
+    } catch (error) {
+      setStatus("Error starting speedtest");
+      setTimeout(() => setStatus(""), 3000);
+      console.error("Error:", error);
     }
   };
 
@@ -200,6 +235,51 @@ function App() {
               <span className={getMetricClass("rsrq", metrics.rsrq)}>
                 RSRQ: {metrics.rsrq}
               </span>
+            )}
+          </div>
+        )}
+
+        {(speedtest.download ||
+          speedtest.upload ||
+          speedtest.ping ||
+          speedtest.isRunning) && (
+          <div className="speedtest-display">
+            <div className="speedtest-header">
+              <div className="speedtest-title">Speed Test</div>
+              <button
+                className="speedtest-refresh-button"
+                onClick={handleRunSpeedtest}
+                disabled={speedtest.isRunning}
+                title="Run speed test"
+              >
+                {speedtest.isRunning ? "Running..." : "↻"}
+              </button>
+            </div>
+            {speedtest.isRunning ? (
+              <div className="speedtest-running">
+                Running speed test, please wait...
+              </div>
+            ) : (
+              <>
+                <div className="speedtest-results">
+                  {speedtest.download !== null && (
+                    <span>
+                      ↓ {(speedtest.download / 125000).toFixed(2)} Mbps
+                    </span>
+                  )}
+                  {speedtest.upload !== null && (
+                    <span>↑ {(speedtest.upload / 125000).toFixed(2)} Mbps</span>
+                  )}
+                  {speedtest.ping !== null && (
+                    <span>Ping: {speedtest.ping.toFixed(0)}ms</span>
+                  )}
+                </div>
+                {speedtest.timestamp && (
+                  <div className="speedtest-time">
+                    Last: {new Date(speedtest.timestamp).toLocaleTimeString()}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

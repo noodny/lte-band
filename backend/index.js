@@ -4,6 +4,7 @@ import fastifyStatic from "@fastify/static";
 import path from "path";
 import { fileURLToPath } from "url";
 import { spawn } from "child_process";
+import speedtest from "speedtest-net";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,6 +22,16 @@ let cachedStatus = {
   cinr: null,
   rsrq: null,
   lastUpdated: null,
+  error: null,
+};
+
+// Store latest speedtest results
+let speedtestResults = {
+  download: null,
+  upload: null,
+  ping: null,
+  timestamp: null,
+  isRunning: false,
   error: null,
 };
 
@@ -50,6 +61,7 @@ fastify.get("/status", async (request, reply) => {
     cinr: cachedStatus.cinr,
     rsrq: cachedStatus.rsrq,
     lastUpdated: cachedStatus.lastUpdated,
+    speedtest: speedtestResults,
   };
 });
 
@@ -314,6 +326,18 @@ fastify.setNotFoundHandler((request, reply) => {
   reply.sendFile("index.html");
 });
 
+// Speedtest endpoint
+fastify.post("/speedtest", async (request, reply) => {
+  if (speedtestResults.isRunning) {
+    return reply.code(409).send({ error: "Speedtest already running" });
+  }
+
+  // Run speedtest asynchronously
+  runSpeedtest();
+
+  return { success: true, message: "Speedtest started" };
+});
+
 // Function to periodically update LTE status
 async function updateLTEStatus() {
   try {
@@ -338,6 +362,43 @@ async function updateLTEStatus() {
   }
 }
 
+// Function to run speedtest
+async function runSpeedtest() {
+  if (speedtestResults.isRunning) {
+    fastify.log.warn("Speedtest already running, skipping...");
+    return;
+  }
+
+  try {
+    speedtestResults.isRunning = true;
+    speedtestResults.error = null;
+    fastify.log.info("Starting speedtest...");
+
+    const result = await speedtest({ acceptLicense: true, acceptGdpr: true });
+
+    speedtestResults = {
+      download: result.download.bandwidth,
+      upload: result.upload.bandwidth,
+      ping: result.ping.latency,
+      timestamp: new Date().toISOString(),
+      isRunning: false,
+      error: null,
+    };
+
+    fastify.log.info(
+      `Speedtest completed - Download: ${(
+        result.download.bandwidth / 125000
+      ).toFixed(2)} Mbps, Upload: ${(result.upload.bandwidth / 125000).toFixed(
+        2
+      )} Mbps, Ping: ${result.ping.latency}ms`
+    );
+  } catch (error) {
+    fastify.log.error(`Speedtest failed: ${error.message}`);
+    speedtestResults.error = error.message;
+    speedtestResults.isRunning = false;
+  }
+}
+
 // Start server
 try {
   await fastify.listen({ port: 3001, host: "0.0.0.0" });
@@ -345,6 +406,7 @@ try {
   // Start periodic status updates
   fastify.log.info("Starting periodic LTE status updates (every 30 seconds)");
   updateLTEStatus(); // Initial fetch
+  runSpeedtest(); // Initial speedtest
   setInterval(updateLTEStatus, 30000); // Every 30 seconds
 } catch (err) {
   fastify.log.error(err);

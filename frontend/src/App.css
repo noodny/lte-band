@@ -81,6 +81,76 @@ h1 {
   font-weight: 600;
 }
 
+.speedtest-display {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 15px;
+}
+
+.speedtest-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.speedtest-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.9;
+  font-weight: 600;
+}
+
+.speedtest-refresh-button {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: bold;
+}
+
+.speedtest-refresh-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.speedtest-refresh-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.speedtest-running {
+  font-size: 14px;
+  opacity: 0.9;
+  padding: 10px 0;
+  text-align: center;
+  font-style: italic;
+}
+
+.speedtest-results {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin-bottom: 5px;
+}
+
+.speedtest-results span {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.speedtest-time {
+  font-size: 11px;
+  opacity: 0.8;
+  margin-top: 5px;
+}
+
 .band-button {
   background: #f5f5f5;
   border: 2px solid #e0e0e0;
