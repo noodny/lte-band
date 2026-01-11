@@ -12,6 +12,12 @@ function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [fetchError, setFetchError] = useState(false);
+  const [metrics, setMetrics] = useState({
+    rssi: null,
+    rsrp: null,
+    cinr: null,
+    rsrq: null,
+  });
 
   const fetchStatus = async () => {
     setIsLoading(true);
@@ -32,6 +38,12 @@ function App() {
 
       setSelectedBands(data.selectedBands || []);
       setActiveBands(data.activeBands || []);
+      setMetrics({
+        rssi: data.rssi,
+        rsrp: data.rsrp,
+        cinr: data.cinr,
+        rsrq: data.rsrq,
+      });
       setFetchError(false);
 
       // Initialize userSelectedBands only on first fetch
@@ -123,6 +135,20 @@ function App() {
     return !sortedUser.every((band, index) => band === sortedSelected[index]);
   };
 
+  const getMetricClass = (metricName, value) => {
+    if (metricName === "cinr" && value !== null) {
+      return value >= 10 ? "metric-good" : "metric-warning";
+    }
+    if (metricName === "rsrq" && value) {
+      // Parse RSRQ value (format might be "(-15)" or "-15")
+      const numValue = parseFloat(value.replace(/[()]/g, ""));
+      if (!isNaN(numValue)) {
+        return numValue >= -15 ? "metric-good" : "metric-warning";
+      }
+    }
+    return "";
+  };
+
   return (
     <div className="app">
       <div className="container">
@@ -160,6 +186,23 @@ function App() {
             </div>
           ))}
         </div>
+
+        {(metrics.rssi || metrics.rsrp || metrics.cinr || metrics.rsrq) && (
+          <div className="metrics-display">
+            {metrics.rssi && <span>RSSI: {metrics.rssi}</span>}
+            {metrics.rsrp && <span>RSRP: {metrics.rsrp}</span>}
+            {metrics.cinr !== null && (
+              <span className={getMetricClass("cinr", metrics.cinr)}>
+                CINR: {metrics.cinr}
+              </span>
+            )}
+            {metrics.rsrq && (
+              <span className={getMetricClass("rsrq", metrics.rsrq)}>
+                RSRQ: {metrics.rsrq}
+              </span>
+            )}
+          </div>
+        )}
 
         <button
           className="save-button"

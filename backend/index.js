@@ -16,6 +16,10 @@ const fastify = Fastify({
 let cachedStatus = {
   selectedBands: [],
   activeBands: [],
+  rssi: null,
+  rsrp: null,
+  cinr: null,
+  rsrq: null,
   lastUpdated: null,
   error: null,
 };
@@ -41,6 +45,10 @@ fastify.get("/status", async (request, reply) => {
   return {
     selectedBands: cachedStatus.selectedBands,
     activeBands: cachedStatus.activeBands,
+    rssi: cachedStatus.rssi,
+    rsrp: cachedStatus.rsrp,
+    cinr: cachedStatus.cinr,
+    rsrq: cachedStatus.rsrq,
     lastUpdated: cachedStatus.lastUpdated,
   };
 });
@@ -52,6 +60,10 @@ async function getLTEStatus() {
     let buffer = "";
     let selectedBands = [];
     let activeBands = [];
+    let rssi = null;
+    let rsrp = null;
+    let cinr = null;
+    let rsrq = null;
     let stage = "login";
 
     const processOutput = (data) => {
@@ -119,13 +131,44 @@ async function getLTEStatus() {
           if (scellBandMatch) {
             activeBands.push(parseInt(scellBandMatch[1]));
           }
+
+          // Extract RSSI
+          const rssiMatch = line.match(/pccrxmRSSI \(([^)]*)\)/);
+          if (rssiMatch) {
+            rssi = rssiMatch[1];
+          }
+
+          // Extract RSRP
+          const rsrpMatch = line.match(/PrxMrsrp \(([^,]*),/);
+          if (rsrpMatch) {
+            rsrp = rsrpMatch[1];
+          }
+
+          // Extract CINR
+          const cinrMatch = line.match(/Sinr ([0-9]+)/);
+          if (cinrMatch) {
+            cinr = parseInt(cinrMatch[1]);
+          }
+
+          // Extract RSRQ
+          const rsrqMatch = line.match(/Rsrq \(([^,]*),/);
+          if (rsrqMatch) {
+            rsrq = rsrqMatch[1];
+          }
         });
 
         // If we found at least one band, we can complete
         if (activeBands.length > 0) {
           telnet.stdin.write("exit\n");
           telnet.kill();
-          resolve({ selectedBands, activeBands: [...new Set(activeBands)] });
+          resolve({
+            selectedBands,
+            activeBands: [...new Set(activeBands)],
+            rssi,
+            rsrp,
+            cinr,
+            rsrq,
+          });
         }
       }
     };
@@ -141,7 +184,7 @@ async function getLTEStatus() {
     telnet.on("close", (code) => {
       if (stage === "parse_active" && activeBands.length === 0) {
         // Sometimes we might not get active bands if not connected
-        resolve({ selectedBands, activeBands: [] });
+        resolve({ selectedBands, activeBands: [], rssi, rsrp, cinr, rsrq });
       } else if (selectedBands.length === 0) {
         reject(new Error("Failed to retrieve LTE status"));
       }
@@ -155,7 +198,7 @@ async function getLTEStatus() {
     setTimeout(() => {
       telnet.kill();
       if (selectedBands.length > 0) {
-        resolve({ selectedBands, activeBands });
+        resolve({ selectedBands, activeBands, rssi, rsrp, cinr, rsrq });
       } else {
         reject(new Error("Timeout waiting for LTE status"));
       }
@@ -274,15 +317,20 @@ fastify.setNotFoundHandler((request, reply) => {
 // Function to periodically update LTE status
 async function updateLTEStatus() {
   try {
-    const { selectedBands, activeBands } = await getLTEStatus();
+    const { selectedBands, activeBands, rssi, rsrp, cinr, rsrq } =
+      await getLTEStatus();
     cachedStatus = {
       selectedBands,
       activeBands,
+      rssi,
+      rsrp,
+      cinr,
+      rsrq,
       lastUpdated: new Date().toISOString(),
       error: null,
     };
     fastify.log.info(
-      `LTE status updated: ${selectedBands.length} selected, ${activeBands.length} active`
+      `LTE status updated: ${selectedBands.length} selected, ${activeBands.length} active, RSSI: ${rssi}, RSRP: ${rsrp}, CINR: ${cinr}, RSRQ: ${rsrq}`
     );
   } catch (error) {
     fastify.log.error(`Failed to update LTE status: ${error.message}`);
