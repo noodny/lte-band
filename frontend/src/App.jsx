@@ -15,6 +15,8 @@ function App() {
 
   const fetchStatus = async () => {
     setIsLoading(true);
+    const startTime = Date.now();
+
     try {
       const response = await fetch("/status");
 
@@ -46,6 +48,14 @@ function App() {
       setTimeout(() => setStatus(""), 5000);
       return false;
     } finally {
+      // Ensure minimum 500ms before resolving
+      const elapsed = Date.now() - startTime;
+      const delay = Math.max(0, 500 - elapsed);
+
+      if (delay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+
       setIsLoading(false);
     }
   };

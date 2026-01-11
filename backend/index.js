@@ -173,6 +173,13 @@ fastify.post("/save", async (request, reply) => {
     }
 
     await saveLTEBands(bands);
+
+    // Trigger immediate status update after save
+    fastify.log.info("Save successful, triggering immediate status update");
+    setTimeout(() => {
+      updateLTEStatus();
+    }, 5000); // Wait 5 seconds for modem to start rebooting
+
     return { success: true, bands };
   } catch (error) {
     fastify.log.error(error);
