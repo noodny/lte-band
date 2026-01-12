@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 
-const BAND_VALUES = [0, 1, 3, 7, 8, 20];
+const BAND_VALUES = [1, 3, 7, 8, 20];
 
 function App() {
   const [selectedBands, setSelectedBands] = useState([]);
