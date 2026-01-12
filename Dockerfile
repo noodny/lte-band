@@ -1,7 +1,7 @@
 # Multi-stage build for LTE Band Selector
 
 # Stage 1: Build Frontend
-FROM node:18-alpine AS frontend-build
+FROM node:22-alpine AS frontend-build
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm install
@@ -9,11 +9,11 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Setup Backend
-FROM node:18-alpine
+FROM node:22-alpine
 WORKDIR /app
 
-# Install telnet and speedtest dependencies
-RUN apk add --no-cache busybox-extras
+# Install telnet, Python and speedtest dependencies
+RUN apk add --no-cache busybox-extras python3 py3-pip
 
 # Copy backend files
 COPY backend/package*.json ./
