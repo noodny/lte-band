@@ -4,7 +4,7 @@ import fastifyStatic from "@fastify/static";
 import path from "path";
 import { fileURLToPath } from "url";
 import { spawn } from "child_process";
-import speedtest from "speedtest-net";
+// import speedtest from "speedtest-net";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -368,39 +368,35 @@ async function updateLTEStatus() {
 
 // Function to run speedtest
 async function runSpeedtest() {
-  if (speedtestResults.isRunning) {
-    fastify.log.warn("Speedtest already running, skipping...");
-    return;
-  }
-
-  try {
-    speedtestResults.isRunning = true;
-    speedtestResults.error = null;
-    fastify.log.info("Starting speedtest...");
-
-    const result = await speedtest({ acceptLicense: true, acceptGdpr: true });
-
-    speedtestResults = {
-      download: result.download.bandwidth,
-      upload: result.upload.bandwidth,
-      ping: result.ping.latency,
-      timestamp: new Date().toISOString(),
-      isRunning: false,
-      error: null,
-    };
-
-    fastify.log.info(
-      `Speedtest completed - Download: ${(
-        result.download.bandwidth / 125000
-      ).toFixed(2)} Mbps, Upload: ${(result.upload.bandwidth / 125000).toFixed(
-        2
-      )} Mbps, Ping: ${result.ping.latency}ms`
-    );
-  } catch (error) {
-    fastify.log.error(`Speedtest failed: ${error.message}`);
-    speedtestResults.error = error.message;
-    speedtestResults.isRunning = false;
-  }
+  // if (speedtestResults.isRunning) {
+  //   fastify.log.warn("Speedtest already running, skipping...");
+  //   return;
+  // }
+  // try {
+  //   speedtestResults.isRunning = true;
+  //   speedtestResults.error = null;
+  //   fastify.log.info("Starting speedtest...");
+  //   const result = await speedtest({ acceptLicense: true, acceptGdpr: true });
+  //   speedtestResults = {
+  //     download: result.download.bandwidth,
+  //     upload: result.upload.bandwidth,
+  //     ping: result.ping.latency,
+  //     timestamp: new Date().toISOString(),
+  //     isRunning: false,
+  //     error: null,
+  //   };
+  //   fastify.log.info(
+  //     `Speedtest completed - Download: ${(
+  //       result.download.bandwidth / 125000
+  //     ).toFixed(2)} Mbps, Upload: ${(result.upload.bandwidth / 125000).toFixed(
+  //       2
+  //     )} Mbps, Ping: ${result.ping.latency}ms`
+  //   );
+  // } catch (error) {
+  //   fastify.log.error(`Speedtest failed: ${error.message}`);
+  //   speedtestResults.error = error.message;
+  //   speedtestResults.isRunning = false;
+  // }
 }
 
 // Start server
