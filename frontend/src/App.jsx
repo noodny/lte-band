@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import "./App.css";
 
 const BAND_VALUES = [1, 3, 7, 8, 20];
@@ -10,7 +10,7 @@ function App() {
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const isInitializedRef = useRef(false);
   const [fetchError, setFetchError] = useState(false);
   const [metrics, setMetrics] = useState({
     rssi: null,
@@ -62,9 +62,9 @@ function App() {
       setStatus("");
 
       // Initialize userSelectedBands only on first fetch
-      if (!isInitialized) {
+      if (!isInitializedRef.current) {
         setUserSelectedBands(data.selectedBands || []);
-        setIsInitialized(true);
+        isInitializedRef.current = true;
       }
 
       return true;
