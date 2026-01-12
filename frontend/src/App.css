@@ -133,6 +133,15 @@ h1 {
   font-style: italic;
 }
 
+.speedtest-error {
+  font-size: 14px;
+  padding: 10px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  margin-top: 5px;
+}
+
 .speedtest-results {
   display: flex;
   gap: 15px;

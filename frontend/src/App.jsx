@@ -24,6 +24,7 @@ function App() {
     ping: null,
     timestamp: null,
     isRunning: false,
+    error: null,
   });
 
   const fetchStatus = async () => {
@@ -32,10 +33,6 @@ function App() {
 
     try {
       const response = await fetch("/status");
-
-      if (!response.ok) {
-        throw new Error(response.body);
-      }
 
       const data = await response.json();
 
@@ -58,9 +55,11 @@ function App() {
           ping: data.speedtest.ping,
           timestamp: data.speedtest.timestamp,
           isRunning: data.speedtest.isRunning || false,
+          error: data.speedtest.error || null,
         });
       }
       setFetchError(false);
+      setStatus("");
 
       // Initialize userSelectedBands only on first fetch
       if (!isInitialized) {
@@ -73,7 +72,6 @@ function App() {
       console.error("Error fetching status:", error);
       setFetchError(true);
       setStatus(`${error.message}`);
-      setTimeout(() => setStatus(""), 5000);
       return false;
     } finally {
       // Ensure minimum 500ms before resolving
@@ -189,14 +187,6 @@ function App() {
       <div className="container">
         <h1>LTE Band Selector</h1>
 
-        <button
-          className="refresh-button"
-          onClick={fetchStatus}
-          disabled={isLoading}
-        >
-          {isLoading ? "Refreshing..." : "Refresh Status"}
-        </button>
-
         <div className="band-grid">
           {BAND_VALUES.map((value) => (
             <div
@@ -242,7 +232,8 @@ function App() {
         {(speedtest.download ||
           speedtest.upload ||
           speedtest.ping ||
-          speedtest.isRunning) && (
+          speedtest.isRunning ||
+          speedtest.error) && (
           <div className="speedtest-display">
             <div className="speedtest-header">
               <div className="speedtest-title">Speed Test</div>
@@ -259,6 +250,8 @@ function App() {
               <div className="speedtest-running">
                 Running speed test, please wait...
               </div>
+            ) : speedtest.error ? (
+              <div className="speedtest-error">Error: {speedtest.error}</div>
             ) : (
               <>
                 <div className="speedtest-results">
