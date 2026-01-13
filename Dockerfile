@@ -19,13 +19,15 @@ RUN apk add --no-cache busybox-extras python3 py3-pip
 COPY backend/package*.json ./
 RUN npm install --production
 
-COPY backend/ ./
+COPY backend/ ./backend
 
 # Copy built frontend from previous stage
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
 # Expose port
 EXPOSE 3001
+
+WORKDIR /app/backend
 
 # Start the backend server
 CMD ["node", "index.js"]
