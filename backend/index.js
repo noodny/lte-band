@@ -94,7 +94,7 @@ async function getLTEStatus() {
         stage = "ready";
       } else if (
         stage === "ready" &&
-        line.includes("G C T   L T E   M O D E M")
+        (line.includes("G C T   L T E   M O D E M") || line.includes("#"))
       ) {
         telnet.stdin.write("lted_cli\n");
         stage = "lted_cli";
