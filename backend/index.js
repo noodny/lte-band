@@ -171,7 +171,11 @@ async function getLTEStatus() {
 
         // If we found at least one band, we can complete
         if (activeBands.length > 0) {
-          telnet.stdin.write("exit\n");
+          try {
+            telnet.stdin.write("exit\n");
+          } catch (e) {
+            fastify.log.error(`Failed to write exit command: ${e.message}`);
+          }
           telnet.kill();
           resolve({
             selectedBands,
@@ -208,7 +212,11 @@ async function getLTEStatus() {
 
     // Set a timeout of 30 seconds
     setTimeout(() => {
-      telnet.stdin.write("exit\n");
+      try {
+        telnet.stdin.write("exit\n");
+      } catch (e) {
+        fastify.log.error(`Failed to write exit command: ${e.message}`);
+      }
       telnet.kill();
       if (selectedBands.length > 0) {
         resolve({ selectedBands, activeBands, rssi, rsrp, cinr, rsrq });
@@ -276,7 +284,11 @@ async function saveLTEBands(bands) {
         stage === "lted_cli" &&
         line.includes("lted_client_init fail")
       ) {
-        telnet.stdin.write("exit\n");
+        try {
+          telnet.stdin.write("exit\n");
+        } catch (e) {
+          fastify.log.error(`Failed to write exit command: ${e.message}`);
+        }
         telnet.kill();
         reject(new Error("Failed to initialize lted_cli"));
       } else if (stage === "lted_cli" && line.includes("OK")) {
@@ -297,7 +309,11 @@ async function saveLTEBands(bands) {
         stage = "reboot";
         // Give it a moment to send the reboot command
         setTimeout(() => {
-          telnet.stdin.write("exit\n");
+          try {
+            telnet.stdin.write("exit\n");
+          } catch (e) {
+            fastify.log.error(`Failed to write exit command: ${e.message}`);
+          }
           telnet.kill();
           resolve();
         }, 1000);
@@ -318,7 +334,11 @@ async function saveLTEBands(bands) {
 
     // Set a timeout of 30 seconds
     setTimeout(() => {
-      telnet.stdin.write("exit\n");
+      try {
+        telnet.stdin.write("exit\n");
+      } catch (e) {
+        fastify.log.error(`Failed to write exit command: ${e.message}`);
+      }
       telnet.kill();
       reject(new Error("Timeout while saving LTE bands"));
     }, 30000);
