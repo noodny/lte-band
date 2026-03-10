@@ -13,6 +13,21 @@ const fastify = Fastify({
   logger: true,
 });
 
+function safeTelnetWrite(telnet, command, context) {
+  if (!telnet?.stdin || telnet.stdin.destroyed || !telnet.stdin.writable) {
+    fastify.log.warn(`[${context}] telnet stdin is not writable`);
+    return false;
+  }
+
+  try {
+    telnet.stdin.write(command);
+    return true;
+  } catch (error) {
+    fastify.log.warn(`[${context}] telnet write failed: ${error.message}`);
+    return false;
+  }
+}
+
 // Store latest LTE status
 let cachedStatus = {
   selectedBands: [],
@@ -87,16 +102,16 @@ async function getLTEStatus() {
       fastify.log.info(`[STATUS][${stage}] ${line}`);
 
       if (stage === "login" && line.includes("login:")) {
-        telnet.stdin.write("root\n");
+        safeTelnetWrite(telnet, "root\n", "STATUS/login");
         stage = "password";
       } else if (stage === "password" && line.includes("Password:")) {
-        telnet.stdin.write("gct\n");
+        safeTelnetWrite(telnet, "gct\n", "STATUS/password");
         stage = "ready";
       } else if (
         stage === "ready" &&
         (line.includes("G C T   L T E   M O D E M") || line.includes("#"))
       ) {
-        telnet.stdin.write("lted_cli\n");
+        safeTelnetWrite(telnet, "lted_cli\n", "STATUS/ready");
         stage = "lted_cli";
       } else if (
         stage === "lted_cli" &&
@@ -104,10 +119,10 @@ async function getLTEStatus() {
       ) {
         reject(new Error("Failed to initialize lted_cli"));
       } else if (stage === "lted_cli" && line.includes("OK")) {
-        telnet.stdin.write("arm1log 2\n");
+        safeTelnetWrite(telnet, "arm1log 2\n", "STATUS/lted_cli");
         stage = "arm1log";
       } else if (stage === "arm1log" && line.includes("OK")) {
-        telnet.stdin.write("nvm bcfgr 49 0\n");
+        safeTelnetWrite(telnet, "nvm bcfgr 49 0\n", "STATUS/arm1log");
         stage = "nvm_bcfgr";
       } else if (stage === "nvm_bcfgr") {
         const resultLine = lines.find((line) =>
@@ -171,11 +186,7 @@ async function getLTEStatus() {
 
         // If we found at least one band, we can complete
         if (activeBands.length > 0) {
-          try {
-            telnet.stdin.write("exit\n");
-          } catch (e) {
-            fastify.log.error(`Failed to write exit command: ${e.message}`);
-          }
+          safeTelnetWrite(telnet, "exit\n", "STATUS/parse_active");
           telnet.kill();
           resolve({
             selectedBands,
@@ -197,6 +208,10 @@ async function getLTEStatus() {
       fastify.log.error(`Telnet error: ${data}`);
     });
 
+    telnet.stdin.on("error", (error) => {
+      fastify.log.warn(`Telnet stdin error: ${error.message}`);
+    });
+
     telnet.on("close", (code) => {
       if (stage === "parse_active" && activeBands.length === 0) {
         // Sometimes we might not get active bands if not connected
@@ -212,11 +227,7 @@ async function getLTEStatus() {
 
     // Set a timeout of 30 seconds
     setTimeout(() => {
-      try {
-        telnet.stdin.write("exit\n");
-      } catch (e) {
-        fastify.log.error(`Failed to write exit command: ${e.message}`);
-      }
+      safeTelnetWrite(telnet, "exit\n", "STATUS/timeout");
       telnet.kill();
       if (selectedBands.length > 0) {
         resolve({ selectedBands, activeBands, rssi, rsrp, cinr, rsrq });
@@ -269,51 +280,47 @@ async function saveLTEBands(bands) {
       fastify.log.info(`[SAVE][${stage}] ${line}`);
 
       if (stage === "login" && line.includes("login:")) {
-        telnet.stdin.write("root\n");
+        safeTelnetWrite(telnet, "root\n", "SAVE/login");
         stage = "password";
       } else if (stage === "password" && line.includes("Password:")) {
-        telnet.stdin.write("gct\n");
+        safeTelnetWrite(telnet, "gct\n", "SAVE/password");
         stage = "ready";
       } else if (
         stage === "ready" &&
         line.includes("G C T   L T E   M O D E M")
       ) {
-        telnet.stdin.write("lted_cli\n");
+        safeTelnetWrite(telnet, "lted_cli\n", "SAVE/ready");
         stage = "lted_cli";
       } else if (
         stage === "lted_cli" &&
         line.includes("lted_client_init fail")
       ) {
-        try {
-          telnet.stdin.write("exit\n");
-        } catch (e) {
-          fastify.log.error(`Failed to write exit command: ${e.message}`);
-        }
+        safeTelnetWrite(telnet, "exit\n", "SAVE/lted_cli_fail");
         telnet.kill();
         reject(new Error("Failed to initialize lted_cli"));
       } else if (stage === "lted_cli" && line.includes("OK")) {
-        telnet.stdin.write("arm1log 2\n");
+        safeTelnetWrite(telnet, "arm1log 2\n", "SAVE/lted_cli");
         stage = "arm1log";
       } else if (stage === "arm1log" && line.includes("OK")) {
         const bandsString = bands.join(" ");
-        telnet.stdin.write(`nvm bcfgw 49 0 ${bandsString}\n`);
+        safeTelnetWrite(
+          telnet,
+          `nvm bcfgw 49 0 ${bandsString}\n`,
+          "SAVE/arm1log"
+        );
         stage = "nvm_bcfgw";
       } else if (stage === "nvm_bcfgw" && line.includes("OK")) {
-        telnet.stdin.write("nvm bcfgsv 1\n");
+        safeTelnetWrite(telnet, "nvm bcfgsv 1\n", "SAVE/nvm_bcfgw");
         stage = "nvm_bcfgsv";
       } else if (stage === "nvm_bcfgsv" && line.includes("OK")) {
-        telnet.stdin.write("shell\n");
+        safeTelnetWrite(telnet, "shell\n", "SAVE/nvm_bcfgsv");
         stage = "shell";
       } else if (stage === "shell" && line.includes("#")) {
-        telnet.stdin.write("reboot\n");
+        safeTelnetWrite(telnet, "reboot\n", "SAVE/shell");
         stage = "reboot";
         // Give it a moment to send the reboot command
         setTimeout(() => {
-          try {
-            telnet.stdin.write("exit\n");
-          } catch (e) {
-            fastify.log.error(`Failed to write exit command: ${e.message}`);
-          }
+          safeTelnetWrite(telnet, "exit\n", "SAVE/reboot");
           telnet.kill();
           resolve();
         }, 1000);
@@ -328,17 +335,17 @@ async function saveLTEBands(bands) {
       fastify.log.error(`Telnet error: ${data}`);
     });
 
+    telnet.stdin.on("error", (error) => {
+      fastify.log.warn(`Telnet stdin error: ${error.message}`);
+    });
+
     telnet.on("error", (error) => {
       reject(error);
     });
 
     // Set a timeout of 30 seconds
     setTimeout(() => {
-      try {
-        telnet.stdin.write("exit\n");
-      } catch (e) {
-        fastify.log.error(`Failed to write exit command: ${e.message}`);
-      }
+      safeTelnetWrite(telnet, "exit\n", "SAVE/timeout");
       telnet.kill();
       reject(new Error("Timeout while saving LTE bands"));
     }, 30000);
@@ -421,7 +428,8 @@ async function runSpeedtest() {
 
 // Start server
 try {
-  await fastify.listen({ port: 3001, host: "0.0.0.0" });
+  const port = Number(process.env.PORT) || 3001;
+  await fastify.listen({ port, host: "0.0.0.0" });
 
   // Start periodic status updates
   fastify.log.info("Starting periodic LTE status updates (every 30 seconds)");
