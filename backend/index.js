@@ -291,9 +291,19 @@ fastify.post("/save", async (request, reply) => {
 
     await saveLTEBands(bands);
     rebooting = true;
+    cachedStatus = {
+      selectedBands: [],
+      activeBands: [],
+      rssi: null,
+      rsrp: null,
+      cinr: null,
+      rsrq: null,
+      lastUpdated: null,
+      error: null,
+    };
 
     fastify.log.info("Save successful, device is rebooting");
-    setTimeout(() => updateLTEStatus(), 5000);
+    setTimeout(() => updateLTEStatus(), 2000);
 
     return { success: true, bands };
   } catch (error) {
