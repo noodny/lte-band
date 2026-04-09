@@ -11,6 +11,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const isInitializedRef = useRef(false);
+  const rebootingRef = useRef(false);
   const [fetchError, setFetchError] = useState(false);
   const [rebooting, setRebooting] = useState(false);
   const [metrics, setMetrics] = useState({
@@ -59,12 +60,14 @@ function App() {
           error: data.speedtest.error || null,
         });
       }
+      const wasRebooting = rebootingRef.current;
+      rebootingRef.current = data.rebooting || false;
       setRebooting(data.rebooting || false);
       setFetchError(false);
       setStatus("");
 
-      // Initialize userSelectedBands only on first fetch
-      if (!isInitializedRef.current) {
+      // Sync userSelectedBands on first fetch or when reboot completes
+      if (!isInitializedRef.current || (wasRebooting && !data.rebooting)) {
         setUserSelectedBands(data.selectedBands || []);
         isInitializedRef.current = true;
       }
@@ -125,8 +128,9 @@ function App() {
       });
 
       const data = await response.json();
+      setUserSelectedBands([]);
       setStatus("Saved successfully!");
-      setTimeout(() => setStatus(""), 3000);
+      setTimeout(() => setStatus(""), 4000);
     } catch (error) {
       setStatus("Error saving data");
       console.error("Error:", error);
