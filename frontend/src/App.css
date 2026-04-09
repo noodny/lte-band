@@ -255,6 +255,11 @@ h1 {
   color: #c62828;
 }
 
+.status-message.rebooting {
+  background: #fff3e0;
+  color: #e65100;
+}
+
 @media (max-width: 480px) {
   .container {
     padding: 20px;

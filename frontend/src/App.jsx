@@ -12,6 +12,7 @@ function App() {
   const [isSaving, setIsSaving] = useState(false);
   const isInitializedRef = useRef(false);
   const [fetchError, setFetchError] = useState(false);
+  const [rebooting, setRebooting] = useState(false);
   const [metrics, setMetrics] = useState({
     rssi: null,
     rsrp: null,
@@ -58,6 +59,7 @@ function App() {
           error: data.speedtest.error || null,
         });
       }
+      setRebooting(data.rebooting || false);
       setFetchError(false);
       setStatus("");
 
@@ -280,12 +282,18 @@ function App() {
         <button
           className="save-button"
           onClick={handleSave}
-          disabled={!hasChanges() || isSaving}
+          disabled={!hasChanges() || isSaving || rebooting}
         >
           {isSaving ? "Saving..." : "Save"}
         </button>
 
-        {status && (
+        {rebooting && (
+          <div className="status-message rebooting">
+            Device is rebooting, please wait...
+          </div>
+        )}
+
+        {status && !rebooting && (
           <div className={`status-message ${fetchError ? "error" : ""}`}>
             {status}
           </div>

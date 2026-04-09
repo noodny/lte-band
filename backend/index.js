@@ -247,6 +247,8 @@ let cachedStatus = {
   error: null,
 };
 
+let rebooting = false;
+
 let speedtestResults = {
   download: null,
   upload: null,
@@ -264,7 +266,7 @@ const frontendPath = path.join(__dirname, "../frontend/dist");
 await fastify.register(fastifyStatic, { root: frontendPath, prefix: "/" });
 
 fastify.get("/status", async (request, reply) => {
-  if (cachedStatus.error) {
+  if (!rebooting && cachedStatus.error) {
     return reply.code(500).send({ error: cachedStatus.error });
   }
   return {
@@ -275,6 +277,7 @@ fastify.get("/status", async (request, reply) => {
     cinr: cachedStatus.cinr,
     rsrq: cachedStatus.rsrq,
     lastUpdated: cachedStatus.lastUpdated,
+    rebooting,
     speedtest: speedtestResults,
   };
 });
@@ -287,8 +290,9 @@ fastify.post("/save", async (request, reply) => {
     }
 
     await saveLTEBands(bands);
+    rebooting = true;
 
-    fastify.log.info("Save successful, triggering immediate status update");
+    fastify.log.info("Save successful, device is rebooting");
     setTimeout(() => updateLTEStatus(), 5000);
 
     return { success: true, bands };
@@ -405,6 +409,10 @@ async function updateLTEStatus() {
   try {
     const { selectedBands, activeBands, rssi, rsrp, cinr, rsrq } =
       await getLTEStatus();
+    if (rebooting) {
+      rebooting = false;
+      fastify.log.info("Device back online after reboot");
+    }
     cachedStatus = {
       selectedBands,
       activeBands,
